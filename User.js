@@ -1,66 +1,45 @@
 const express = require('express');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+
 const router = express.Router();
 
-// In-memory user storage (replace with database logic in production)
-let users = [];
-
-// Sign up a user
-router.post('/signup', (req, res) => {
+// User registration
+router.post('/register', async (req, res) => {
     const { username, password } = req.body;
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Validate input
-    if (!username || !password) {
-        return res.status(400).json({ message: 'Username and password are required.' });
-    }
-
-    // Check if the user already exists
-    const existingUser = users.find(user => user.username === username);
-    if (existingUser) {
-        return res.status(400).json({ message: 'User already exists.' });
-    }
-
-    // Create a new user (In a real app, the password should be hashed)
-    const newUser = {
-        id: users.length + 1,
-        username: username,
-        password: password // Hash password in production
-    };
-
-    users.push(newUser);
-    res.status(201).json({ message: 'User created successfully.', user: newUser });
+    const query = `INSERT INTO users (username, password) VALUES (?, ?)`;
+    db.run(query, [username, hashedPassword], function (err) {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        res.status(201).json({ id: this.lastID });
+    });
 });
 
-// Log in a user
+// User login
 router.post('/login', (req, res) => {
     const { username, password } = req.body;
 
-    // Validate input
-    if (!username || !password) {
-        return res.status(400).json({ message: 'Username and password are required.' });
-    }
+    const query = `SELECT * FROM users WHERE username = ?`;
+    db.get(query, [username], (err, user) => {
+        if (err || !user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
 
-    // Check if the user exists and password matches
-    const user = users.find(user => user.username === username && user.password === password);
-    if (!user) {
-        return res.status(400).json({ message: 'Invalid username or password.' });
-    }
-
-    // Successful login
-    res.status(200).json({ message: 'Login successful.', user: user });
+        bcrypt.compare(password, user.password, (err, match) => {
+            if (match) {
+                const token = jwt.sign({ id: user.id }, 'your_jwt_secret', { expiresIn: '1h' });
+                res.json({ token });
+            } else {
+                res.status(401).json({ message: 'Invalid credentials' });
+            }
+        });
+    });
 });
 
-// Get all users (for testing purposes)
-router.get('/', (req, res) => {
-    res.status(200).json(users);
-});
-
-// Get a specific user by ID
-router.get('/:id', (req, res) => {
-    const user = users.find(user => user.id === parseInt(req.params.id));
-    if (!user) {
-        return res.status(404).json({ message: 'User not found.' });
-    }
-    res.status(200).json(user);
-});
-
-module.exports = router;
+module.exports = (database) => {
+    db = database;
+    return router;
+};
