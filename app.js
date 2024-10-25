@@ -1,45 +1,55 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const contactRoutes = require('./contact'); // Make sure this path is correct
+const cors = require('cors');
+const dotenv = require('dotenv');
+const sqlite3 = require('sqlite3').verbose();
+const contactRouter = require('./contact');
+const usersRouter = require('./User');
+
+dotenv.config();
 
 const app = express();
+const PORT = process.env.PORT || 5000;
 
 // Middleware
-app.use(bodyParser.json()); // For parsing application/json
-app.use('/contacts', contactRoutes); // Prefix routes with /contacts
+app.use(cors());
+app.use(bodyParser.json());
 
-// Database connection
-const db = require('./config/db'); // Ensure this path is correct
+// Connect to SQLite database
+const db = new sqlite3.Database('./database.sqlite', (err) => {
+    if (err) {
+        console.error('Error connecting to SQLite database:', err.message);
+    } else {
+        console.log('Connected to SQLite database');
+    }
+});
+
+// Create tables
 db.serialize(() => {
-    // Create tables if they don't exist
-    db.run(`CREATE TABLE IF NOT EXISTS contacts (
+    db.run(`CREATE TABLE IF NOT EXISTS Contacts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
-        email TEXT NOT NULL
-    )`, (err) => {
-        if (err) {
-            console.error('Error creating contacts table:', err.message);
-        } else {
-            console.log('Contacts table created successfully');
-        }
-    });
+        email TEXT NOT NULL,
+        phone TEXT NOT NULL
+    )`);
 
-    // Optionally create a users table as well
-    db.run(`CREATE TABLE IF NOT EXISTS users (
+    db.run(`CREATE TABLE IF NOT EXISTS Users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT NOT NULL,
         password TEXT NOT NULL
-    )`, (err) => {
-        if (err) {
-            console.error('Error creating users table:', err.message);
-        } else {
-            console.log('Users table created successfully');
-        }
-    });
+    )`);
+});
+
+// Routes
+app.use('/contact', contactRouter);
+app.use('/user', usersRouter);
+
+// Root route
+app.get('/', (req, res) => {
+    res.send('Welcome to the Contact Management API');
 });
 
 // Start server
-const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
